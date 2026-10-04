@@ -1,0 +1,30 @@
+{
+  "modelo": "claude-sonnet-5-5",
+  "max_tokens": 64000,
+  "timeout_segundos": 180,
+  "max_reintentos_429": 3,
+
+  "entorno": {
+    "nombre": "qa",
+    "url_base": "https://www.saucedemo.com"
+  },
+
+  "convenciones": {
+    "framework": "Playwright con TypeScript",
+    "patron": "Page Object Model estricto",
+    "selectores": "getByRole y getByLabel; getByTestId solo si el sitio expone data-test",
+    "idioma_casos": "espanol",
+    "idioma_codigo": "ingles"
+  },
+
+  "gasto": {
+    "tope_mensual_usd": 20.0,
+    "porcentaje_aviso": 70
+  },
+
+  "precios_usd_por_millon": {
+    "claude-sonnet-5-5": { "entrada": 2.0, "salida": 10.0 },
+    "claude-opus-5-5":   { "entrada": 4.0, "salida": 20.0 },
+    "claude-haiku-4-5-20251001": { "entrada": 1.0, "salida": 5.0 }
+  }
+}
