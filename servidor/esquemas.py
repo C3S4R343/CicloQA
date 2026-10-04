@@ -97,6 +97,11 @@ class ResultadoAutomatizacion(BaseModel):
 class NuevaEjecucion(BaseModel):
     historia: str = Field(min_length=20)
     entorno: str = "qa"
+    url: str | None = Field(
+        default=None,
+        pattern=r"^https?://\S+$",
+        description="Pagina bajo prueba. Si falta, se usa entorno.url_base de config.json",
+    )
 
 
 class Decision(BaseModel):

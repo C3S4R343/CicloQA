@@ -11,12 +11,14 @@ persona que aprueba, pide cambios o rechaza.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any
+from pathlib import Path
+from typing import Any, Callable
 
-from servidor import db
+from servidor import db, reconocimiento
 from servidor.agentes import analisis, automatizacion, casos
 from servidor.agentes.base import Contexto
 from servidor.claude_client import ClienteClaude, FalloDelAgente
+from servidor.config import CARPETA_PROYECTOS
 from servidor.esquemas import Consumo
 
 
@@ -47,17 +49,32 @@ ROTULO_ETAPA = {
 
 
 class Orquestador:
-    def __init__(self, cfg: dict[str, Any], cliente: ClienteClaude | None = None):
+    def __init__(
+        self,
+        cfg: dict[str, Any],
+        cliente: ClienteClaude | None = None,
+        reconocedor: Callable[[str, Path], dict] = reconocimiento.reconocer,
+    ):
         self.cfg = cfg
         self.cliente = cliente or ClienteClaude(cfg)
+        self.reconocedor = reconocedor
 
     # ----------------------------------------------------------------
 
-    def iniciar(self, historia: str, entorno: str) -> str:
+    def iniciar(self, historia: str, entorno: str, url: str | None = None) -> str:
         db.inicializar()
-        eid = db.crear_ejecucion(historia, entorno)
+        url = url or self.cfg.get("entorno", {}).get("url_base", "")
+        eid = db.crear_ejecucion(historia, entorno, url)
+        self._reconocer(eid, url)
         self._correr_etapa(eid, "analisis", None)
         return eid
+
+    def _reconocer(self, eid: str, url: str) -> None:
+        """Lectura mecanica de la pagina. Si falla, la corrida sigue sin ella."""
+        if not url:
+            return
+        payload = self.reconocedor(url, CARPETA_PROYECTOS / eid)
+        db.guardar_entrega(eid, "reconocimiento", payload, payload.get("error") or url)
 
     def continuar(self, eid: str, decision: str, nota: str | None, excluidos: list[str]) -> None:
         ej = db.ejecucion(eid)
@@ -101,7 +118,11 @@ class Orquestador:
             cliente=self.cliente,
             nota_revisor=nota,
             casos_excluidos=excluidos or [],
+            url=ej.get("url") or self.cfg.get("entorno", {}).get("url_base", ""),
         )
+        ent_r = db.ultima_entrega(eid, "reconocimiento")
+        if ent_r:
+            ctx.reconocimiento = ent_r["payload"]
         ent_a = db.ultima_entrega(eid, "analisis")
         if ent_a:
             ctx.analisis = ent_a["payload"]
@@ -163,6 +184,8 @@ def vista(eid: str) -> dict:
         "etapa": etapa_actual,
         "historia": ej["historia"],
         "entorno": ej["entorno"],
+        "url": ej.get("url"),
+        "reconocimiento": (db.ultima_entrega(eid, "reconocimiento") or {}).get("payload"),
         "versiones": entregas,
         "analisis": (db.ultima_entrega(eid, "analisis") or {}).get("payload"),
         "casos": (db.ultima_entrega(eid, "casos") or {}).get("payload"),

@@ -112,18 +112,30 @@ class ClienteSimulado:
         raise AssertionError(f"Modelo no simulado: {modelo_salida}")
 
 
+def reconocedor_simulado(url, carpeta):
+    """Sustituye al navegador. No abre ninguna pagina."""
+    return {
+        "url": url, "url_final": url, "titulo": "Pagina simulada",
+        "estructura": '- textbox "Username"\n- textbox "Password"\n- button "Login"',
+        "estructura_recortada": False, "captura": "reconocimiento.png",
+    }
+
+
 def main() -> int:
     db.inicializar()
     cfg = config.cargar()
     cli = ClienteSimulado()
-    orq = orquestador.Orquestador(cfg, cli)
+    orq = orquestador.Orquestador(cfg, cli, reconocedor_simulado)
 
     print("\n=== 1. Inicio y primera entrega ===")
     eid = orq.iniciar("Historia de prueba para validar el pipeline completo.", "qa")
     v = orquestador.vista(eid)
     assert v["estado"] == "EsperaAnalisis", v["estado"]
     assert len(v["analisis"]["criterios"]) == 3
-    print(f"  Estado: {v['estado']} · {len(v['analisis']['criterios'])} criterios")
+    assert v["url"] == cfg["entorno"]["url_base"], v["url"]
+    assert v["reconocimiento"]["titulo"] == "Pagina simulada"
+    print(f"  Estado: {v['estado']} · {len(v['analisis']['criterios'])} criterios · "
+          f"pagina {v['url']}")
 
     print("\n=== 2. Pedir cambios: vuelve a la misma etapa y sube version ===")
     orq.continuar(eid, "cambios", "Falta el caso de bloqueo de cuenta", [])
@@ -160,7 +172,7 @@ def main() -> int:
     for b in v["bitacora"]:
         nota = f" — {b['nota']}" if b["nota"] else ""
         print(f"  {b['fecha'][11:16]}  {b['etapa']:16} {b['accion']:28}{nota}")
-    assert len(v["bitacora"]) == 8, len(v["bitacora"])
+    assert len(v["bitacora"]) == 9, len(v["bitacora"])
 
     print("\n=== 7. Append-only: ninguna version se perdio ===")
     hist = db.casos(eid, solo_ultimas=False)

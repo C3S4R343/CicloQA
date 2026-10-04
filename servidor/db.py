@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS ejecuciones (
     historia         TEXT NOT NULL,
     entorno          TEXT NOT NULL,
     estado           TEXT NOT NULL,
+    url              TEXT,
     tokens_entrada   INTEGER NOT NULL DEFAULT 0,
     tokens_salida    INTEGER NOT NULL DEFAULT 0,
     costo_usd        REAL    NOT NULL DEFAULT 0.0
@@ -102,6 +103,10 @@ def conectar() -> sqlite3.Connection:
 def inicializar() -> None:
     with conectar() as cx:
         cx.executescript(ESQUEMA)
+        # Bases creadas antes de que la URL fuera por corrida.
+        columnas = {f["name"] for f in cx.execute("PRAGMA table_info(ejecuciones)")}
+        if "url" not in columnas:
+            cx.execute("ALTER TABLE ejecuciones ADD COLUMN url TEXT")
 
 
 # --------------------------------------------------------------------
@@ -109,13 +114,13 @@ def inicializar() -> None:
 # --------------------------------------------------------------------
 
 
-def crear_ejecucion(historia: str, entorno: str) -> str:
+def crear_ejecucion(historia: str, entorno: str, url: str | None = None) -> str:
     eid = _nid()
     with conectar() as cx:
         cx.execute(
-            "INSERT INTO ejecuciones (id, fecha_inicio, historia, entorno, estado) "
-            "VALUES (?,?,?,?,?)",
-            (eid, _ahora(), historia, entorno, "Analizando"),
+            "INSERT INTO ejecuciones (id, fecha_inicio, historia, entorno, estado, url) "
+            "VALUES (?,?,?,?,?,?)",
+            (eid, _ahora(), historia, entorno, "Analizando", url),
         )
         cx.execute(
             "INSERT INTO estados (id, ejecucion_id, estado, fecha) VALUES (?,?,?,?)",
@@ -278,7 +283,9 @@ def bitacora(ejecucion_id: str) -> list[dict]:
             {
                 "fecha": e["fecha"],
                 "etapa": e["etapa"],
-                "accion": f"Entrega generada (v{e['version']})",
+                "accion": "Reconocimiento de la página"
+                if e["etapa"] == "reconocimiento"
+                else f"Entrega generada (v{e['version']})",
                 "nota": e["nota_previa"],
                 "clase": "nota",
             }

@@ -15,7 +15,9 @@ from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
+from reportlab.lib.utils import ImageReader
 from reportlab.platypus import (
+    Image,
     KeepTogether,
     PageBreak,
     Paragraph,
@@ -26,6 +28,7 @@ from reportlab.platypus import (
 )
 
 from servidor import db
+from servidor.config import CARPETA_PROYECTOS
 
 TINTA = colors.HexColor("#161A1F")
 GRIS = colors.HexColor("#596270")
@@ -136,6 +139,21 @@ def generar(ejecucion_id: str) -> bytes:
     E.append(Paragraph("Historia de usuario", est["h2"]))
     for linea in ej["historia"].split("\n"):
         E.append(Paragraph(linea.replace("&", "&amp;").replace("<", "&lt;") or "&nbsp;", est["mono"]))
+
+    # Pagina bajo prueba ----------------------------------------------
+    ent_r = db.ultima_entrega(ejecucion_id, "reconocimiento")
+    if ent_r:
+        r = ent_r["payload"]
+        E.append(Paragraph("Página bajo prueba", est["h2"]))
+        if r.get("error"):
+            E.append(Paragraph(f"{r['url']} — {r['error']}", est["gris"]))
+        else:
+            E.append(Paragraph(f"{r.get('titulo', '')} · {r.get('url_final', r['url'])}", est["gris"]))
+            captura = CARPETA_PROYECTOS / ejecucion_id / r.get("captura", "")
+            if captura.is_file():
+                ancho, alto = ImageReader(str(captura)).getSize()
+                E.append(Spacer(1, 6))
+                E.append(Image(str(captura), width=16.6 * cm, height=16.6 * cm * alto / ancho))
 
     # Analisis --------------------------------------------------------
     if ent_a and "criterios" in ent_a["payload"]:
@@ -253,6 +271,7 @@ def generar(ejecucion_id: str) -> bytes:
 
 
 ROTULO = {
+    "reconocimiento": "Página bajo prueba",
     "analisis": "Análisis",
     "casos": "Casos de prueba",
     "automatizacion": "Automatización",

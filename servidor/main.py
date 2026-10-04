@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from servidor import config, db, orquestador
 from servidor.claude_client import ClienteClaude, FalloDelAgente, TopeDeGasto, revisar_tope
 from servidor.esquemas import Decision, NuevaEjecucion
+from servidor.reconocimiento import NOMBRE_CAPTURA
 from servidor.reporte import generar as generar_pdf
 
 WEB = Path(__file__).resolve().parents[1] / "web"
@@ -76,7 +77,7 @@ def crear(datos: NuevaEjecucion) -> dict:
     except TopeDeGasto as e:
         raise HTTPException(402, str(e))
     try:
-        eid = _orq().iniciar(datos.historia.strip(), datos.entorno)
+        eid = _orq().iniciar(datos.historia.strip(), datos.entorno, datos.url)
     except FalloDelAgente as e:
         raise HTTPException(502, str(e))
     return orquestador.vista(eid)
@@ -99,6 +100,16 @@ def decidir(eid: str, d: Decision) -> dict:
     except FalloDelAgente as e:
         raise HTTPException(502, str(e))
     return orquestador.vista(eid)
+
+
+@app.get("/api/ejecuciones/{eid}/captura.png")
+def captura(eid: str) -> FileResponse:
+    if not db.ejecucion(eid):
+        raise HTTPException(404, "No existe esa ejecucion.")
+    ruta = config.CARPETA_PROYECTOS / eid / NOMBRE_CAPTURA
+    if not ruta.is_file():
+        raise HTTPException(404, "Esta ejecucion no tiene captura de la pagina.")
+    return FileResponse(ruta, media_type="image/png")
 
 
 @app.get("/api/ejecuciones/{eid}/reporte.pdf")

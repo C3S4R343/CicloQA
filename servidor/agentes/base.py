@@ -25,6 +25,8 @@ class Contexto:
     casos: dict | None = None
     nota_revisor: str | None = None
     casos_excluidos: list[str] = field(default_factory=list)
+    url: str = ""
+    reconocimiento: dict | None = None
 
     def bloque_nota(self) -> str:
         if not self.nota_revisor:

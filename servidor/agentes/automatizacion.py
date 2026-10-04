@@ -73,6 +73,26 @@ def validar_pom(resultado: ResultadoAutomatizacion) -> list[str]:
     return problemas
 
 
+def bloque_pagina(rec: dict | None) -> str:
+    """Lo que el navegador vio al abrir la URL, o la advertencia de que no vio nada."""
+    if not rec or rec.get("error") or not rec.get("estructura"):
+        return (
+            "No se pudo abrir la pagina antes de generar, asi que NO conoces su "
+            "estructura real. Deja en notas que los selectores no estan verificados."
+        )
+    recorte = " (recortada por tamano)" if rec.get("estructura_recortada") else ""
+    return (
+        f"Estructura accesible REAL de {rec.get('url_final') or rec['url']}, leida con un "
+        f"navegador sin iniciar sesion{recorte}. Titulo: {rec.get('titulo', '')}\n"
+        "Los selectores de esta pagina deben salir de aqui: usa los roles y nombres "
+        "tal como aparecen, no los inventes.\n\n"
+        f"{rec['estructura']}\n\n"
+        "Solo conoces esta pagina. Si un caso recorre otras pantallas (por ejemplo, las "
+        "que aparecen despues de iniciar sesion), no viste su estructura: deja en notas "
+        "que page classes tienen selectores sin verificar."
+    )
+
+
 def ejecutar(ctx: Contexto):
     casos = (ctx.casos or {}).get("casos", [])
     incluidos = [c for c in casos if c["id_caso"] not in ctx.casos_excluidos]
@@ -91,9 +111,9 @@ def ejecutar(ctx: Contexto):
             "generacion: crea las que hagan falta."
         )
 
-    url = ctx.cfg.get("entorno", {}).get("url_base", "")
     mensaje = (
-        f"Sitio bajo prueba: {url}\n\n"
+        f"Sitio bajo prueba: {ctx.url}\n\n"
+        f"{bloque_pagina(ctx.reconocimiento)}\n\n"
         f"Convenciones del equipo:\n{ctx.bloque_convenciones()}\n"
         f"{bloque_inv}\n\n"
         "Casos de prueba aprobados por el QA:\n\n"

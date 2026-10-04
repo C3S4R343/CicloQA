@@ -20,7 +20,12 @@ python -m venv .venv
 # Windows:        .\.venv\Scripts\Activate.ps1
 # macOS o Linux:  source .venv/bin/activate
 pip install -r requirements.txt
+playwright install chromium
 ```
+
+El segundo comando descarga el navegador (unos 150 MB) que abre la página
+bajo prueba. Sin él la corrida sigue, pero el agente de automatización
+trabaja sin conocer la página real.
 
 **3. La llave de API.** Consíguela en <https://console.anthropic.com>.
 
@@ -43,6 +48,27 @@ uvicorn servidor.main:app --reload --port 8000
 ```
 
 Abre <http://127.0.0.1:8000>.
+
+Si tu llave no está ligada a un workspace, define también
+`ANTHROPIC_WORKSPACE_ID` con el ID del workspace (`wrkspc_...`).
+
+---
+
+## La página bajo prueba
+
+Cada corrida lleva su propia URL: se escribe en el formulario junto a la
+historia. El valor predeterminado sale de `entorno.url_base` en `config.json`.
+
+Antes del análisis, un navegador abre esa URL y guarda dos cosas: la
+estructura accesible de la página (roles, etiquetas, campos) y una captura.
+La estructura se le entrega al agente de automatización para que los
+selectores salgan de la página real; la captura queda en la interfaz y en
+el PDF como evidencia.
+
+Límite actual: solo ve lo que carga la URL **sin iniciar sesión**. Para las
+pantallas posteriores al login el agente no tiene estructura, y lo declara
+en las notas de su entrega marcando esos selectores como sin verificar. Si
+la página no abre, la corrida continúa y queda registrado en la bitácora.
 
 ---
 
@@ -68,6 +94,7 @@ servidor/
   claude_client.py     Llamadas con salida estructurada y reintento único
   db.py                SQLite append-only
   orquestador.py       Máquina de estados con las compuertas de aprobación
+  reconocimiento.py    Abre la página y captura estructura y screenshot
   reporte.py           PDF con casos, decisiones y bitácora
   agentes/
     analisis.py        Agente 1 · criterios, ambigüedades, riesgos
@@ -111,6 +138,7 @@ el costo real que ves en la interfaz y en el PDF.
 | POST | `/api/ejecuciones` | Inicia una corrida y corre el agente de análisis |
 | GET | `/api/ejecuciones/{id}` | Estado completo de una corrida |
 | POST | `/api/ejecuciones/{id}/decision` | Aprobar, pedir cambios o rechazar |
+| GET | `/api/ejecuciones/{id}/captura.png` | Captura de la página bajo prueba |
 | GET | `/api/ejecuciones/{id}/reporte.pdf` | Descarga el reporte |
 
 La documentación interactiva de la API está en `/api/docs`.
@@ -128,5 +156,6 @@ automático al 70%.
 
 - La ejecución real de las pruebas generadas. El sistema las escribe; correrlas
   es el siguiente agente.
+- El reconocimiento de páginas detrás de un inicio de sesión.
 - Múltiples proveedores de IA. Solo Claude.
 - Varios usuarios. Corre local, para una persona.

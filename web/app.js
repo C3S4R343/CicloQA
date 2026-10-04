@@ -94,7 +94,7 @@ function pintarBitacora() {
     : '<p style="color:var(--fg-3);font-size:12.5px">Cada decisión queda registrada aquí con su hora y su nota.</p>';
   l.scrollTop = l.scrollHeight;
 }
-const ROTULO_ETAPA = { analisis:'Análisis', casos:'Casos de prueba', automatizacion:'Automatización' };
+const ROTULO_ETAPA = { reconocimiento:'Página bajo prueba', analisis:'Análisis', casos:'Casos de prueba', automatizacion:'Automatización' };
 
 // --------------------------------------------------------------- vistas
 
@@ -109,6 +109,11 @@ function vistaInicio(error) {
     ${error ? `<div class="aviso err">${esc(error)}</div>` : ''}
     ${sinLlave ? `<div class="aviso err">No hay llave de API. Define ANTHROPIC_API_KEY y reinicia el servidor.</div>` : ''}
     <div style="margin-top:${error || sinLlave ? '14px' : '0'}">
+      <label for="url">Página bajo prueba</label>
+      <input type="text" id="url" inputmode="url" spellcheck="false" value="${esc(salud ? salud.entorno.url_base : '')}">
+      <p class="ayuda">Se abre en un navegador antes de empezar para leer su estructura y tomar una captura. Solo ve lo que carga sin iniciar sesión.</p>
+    </div>
+    <div style="margin-top:14px">
       <label for="historia">Historia de usuario y criterios de aceptación</label>
       <textarea id="historia" rows="11">${esc(HISTORIA_EJEMPLO)}</textarea>
       <p class="ayuda">No captures casos de prueba aquí. El agente de análisis los deriva de los criterios que escribas.</p>
@@ -126,6 +131,18 @@ function vistaCargando(txt) {
      <p class="ayuda">Una llamada real a la API puede tardar entre 10 y 40 segundos.</p></div>`;
 }
 
+function bloquePagina() {
+  const r = ej.reconocimiento;
+  if (!r) return '';
+  if (r.error) return `<div class="aviso err" style="margin:0 0 16px"><div><b>No se pudo abrir ${esc(r.url)}.</b> ${esc(r.error)} La automatización se generará sin conocer la página real.</div></div>`;
+  return `<details class="pag">
+    <summary><span class="cod">Página reconocida</span> ${esc(r.titulo || r.url_final)} <span class="it-d" style="margin:0">${esc(r.url_final)}</span></summary>
+    <img src="/api/ejecuciones/${esc(ej.id)}/captura.png" alt="Captura de ${esc(r.url_final)}" loading="lazy">
+    <p class="ayuda">Estructura accesible que recibe el agente de automatización${r.estructura_recortada ? ' (recortada por tamaño)' : ''}:</p>
+    <pre>${esc(r.estructura)}</pre>
+  </details>`;
+}
+
 function compuertas() {
   return `<div class="acc">
     <button class="btn btn-ok" data-dec="aprobado">Aprobar y continuar</button>
@@ -139,6 +156,7 @@ function vistaAnalisis() {
   return cab('Análisis del requisito', `Entregado por el agente · versión ${v}`, '<span class="pill p-w">Espera tu aprobación</span>') +
   `<div class="t-cuerpo">
     ${ej.nota_vigente ? `<div class="nota-caja" style="margin:0 0 16px"><b>Regenerado según tu nota:</b> “${esc(ej.nota_vigente)}”</div>` : ''}
+    ${bloquePagina()}
     <p style="color:var(--fg-2);margin-bottom:16px">${esc(a.resumen)}</p>
     <h3 style="font-size:13px;margin-bottom:9px">Criterios identificados</h3>
     <ul class="lista">${(a.criterios || []).map(c => `
@@ -179,6 +197,7 @@ function vistaScripts() {
   return cab('Automatización generada', `${arch.length} archivos · versión ${v}`, '<span class="pill p-w">Espera tu aprobación</span>') +
   `<div class="t-cuerpo">
     ${ej.nota_vigente ? `<div class="nota-caja" style="margin:0 0 16px"><b>Regenerado según tu nota:</b> “${esc(ej.nota_vigente)}”</div>` : ''}
+    ${bloquePagina()}
     ${arch.map(a => `<div class="cod-caja">
       <div class="cod-cab"><span class="cod-ruta">${esc(a.ruta_relativa)}</span>
       <span class="pill p-n">${a.tipo === 'page_object' ? 'Page Object' : 'Escenario'}</span></div>
@@ -215,7 +234,7 @@ function vistaFin(cancelado) {
 function pintar(error) {
   const p = $('panel');
   if (trabajando) {
-    const txt = { analisis: 'Leyendo la historia y los criterios…', casos: 'Diseñando los casos de prueba…', automatizacion: 'Escribiendo las clases de página y los escenarios…' };
+    const txt = { analisis: ej ? 'Leyendo la historia y los criterios…' : 'Abriendo la página y leyendo la historia…', casos: 'Diseñando los casos de prueba…', automatizacion: 'Escribiendo las clases de página y los escenarios…' };
     p.innerHTML = vistaCargando(txt[trabajando] || 'Trabajando…');
   } else if (!ej) {
     p.innerHTML = vistaInicio(error);
@@ -247,9 +266,11 @@ function enlazar() {
 async function iniciar() {
   const historia = $('historia').value.trim();
   if (historia.length < 20) { $('historia').focus(); return; }
+  const url = $('url').value.trim();
+  if (url && !/^https?:\/\/\S+$/.test(url)) { $('url').focus(); $('url').style.borderColor = 'var(--bad)'; return; }
   trabajando = 'analisis'; pintar();
   try {
-    ej = await api('/api/ejecuciones', { method: 'POST', body: JSON.stringify({ historia, entorno: 'qa' }) });
+    ej = await api('/api/ejecuciones', { method: 'POST', body: JSON.stringify({ historia, entorno: 'qa', url: url || null }) });
     trabajando = false; pintar();
   } catch (e) {
     trabajando = false; ej = null; pintar(e.message);
